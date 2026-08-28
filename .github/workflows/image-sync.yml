@@ -1,0 +1,82 @@
+# Docker 镜像同步至 GHCR — example workflow
+#
+# 用途: 公网侧 CI 中转通道, 将 Docker Hub 镜像流式同步到 ghcr.io/<当前仓库>
+# 启用: 复制本文件到目标仓库的 .github/workflows/ 目录
+# 设计依据: skopeo/docs/github-action-ghcr-sync.md (评审记录, 含 P0/P1/P2 修复说明)
+#
+# 关键决策:
+#   - 目标包取当前仓库 (GITHUB_REPOSITORY): 每仓库独立包, tag 冲突域缩小到本仓库;
+#     GHCR 要求包路径全小写, bash 参数展开 ${VAR,,} 统一转小写
+#   - bitnami 公共目录 2025-08-28 起迁移/BSI 化:
+#     bitnami/kafka:3.9  -> bitnamilegacy/kafka:3.9   (存量镜像新家)
+#     bitnami/kafka:4.3  -> apache/kafka:4.3.1        (公共渠道无 4.x, 改用 Apache 官方)
+#   - --multi-arch system: 仅同步 linux/amd64 (runner 平台), 消费方全为 amd64, 避免全架构 ×3-5 带宽
+#   - --dest-creds 无状态注入: 凭据仅存于进程内存, 不写 auth.json 落盘 (区别于 skopeo login)
+#   - --retry-times: 应对 Docker Hub 匿名限流 (GitHub runner 共享出口 IP)
+name: Sync Docker Images to GHCR
+
+on:
+  workflow_dispatch: # 允许在 GitHub Actions 界面手动点击运行
+  # schedule:
+  #   - cron: '0 2 * * 0' # 可选: 每周日凌晨 2 点定时同步 (UTC)
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # GB 级镜像跨 registry 直传的兜底上限
+    permissions:
+      contents: read
+      packages: write # 必须赋予推送到 GHCR 的权限
+
+    strategy:
+      fail-fast: false # 某个镜像失败不影响其他镜像继续执行
+      matrix:
+        include:
+          - source: maximhq/bifrost:v2.0.0
+            tag: maximhq-bifrost-v2.0.0
+          - source: apache/apisix:3.18.0-debian
+            tag: apache-apisix-3.18.0-debian
+          - source: postgres:17.11-bookworm
+            tag: postgres-17.11-bookworm
+          - source: redis:7.4.11-bookworm
+            tag: redis-7.4.11-bookworm
+          # bitnami 公共目录迁移修复 (见文件头注释)
+          - source: bitnamilegacy/kafka:3.9
+            tag: bitnami-kafka-3.9
+          - source: apache/kafka:4.3.1
+            tag: apache-kafka-4.3.1
+
+    steps:
+      # 说明: 不需要 checkout (无仓库文件依赖) 与 docker/login-action (skopeo 不读
+      # ~/.docker/config.json, 凭据经 --src-creds/--dest-creds 直接传入)
+
+      - name: Sync via Skopeo (registry 直传)
+        env:
+          # 可选: Docker Hub 账号 (匿名限流 429 时在 repo Settings -> Secrets 配置)
+          # 未配置时表达式结果为空字符串, skopeo 走匿名拉取
+          SRC_CREDS: ${{ secrets.DOCKERHUB_USERNAME && format('{0}:{1}', secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_TOKEN) || '' }}
+          DEST_CREDS: ${{ format('{0}:{1}', github.actor, secrets.GITHUB_TOKEN) }}
+        run: |
+          # 目标 = 当前仓库对应的 GHCR 包 (GITHUB_REPOSITORY, 转小写满足 GHCR 命名要求)
+          DEST_IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+
+          echo "🔄 同步: ${{ matrix.source }} -> ${DEST_IMAGE}:${{ matrix.tag }}"
+
+          # shellcheck disable=SC2086
+          skopeo copy \
+            ${SRC_CREDS:+--src-creds "$SRC_CREDS"} \
+            --dest-creds "$DEST_CREDS" \
+            --retry-times 5 --retry-delay 10s \
+            --multi-arch system \
+            "docker://${{ matrix.source }}" \
+            "docker://${DEST_IMAGE}:${{ matrix.tag }}"
+
+      - name: Verify target digest (同步后校验)
+        env:
+          DEST_CREDS: ${{ format('{0}:{1}', github.actor, secrets.GITHUB_TOKEN) }}
+        run: |
+          DEST_IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          skopeo inspect \
+            --creds "$DEST_CREDS" \
+            "docker://${DEST_IMAGE}:${{ matrix.tag }}" > /dev/null \
+            && echo "✓ 目标可拉取: ${DEST_IMAGE}:${{ matrix.tag }}"
