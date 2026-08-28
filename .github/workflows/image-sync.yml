@@ -13,6 +13,9 @@
 #   - --multi-arch system: 仅同步 linux/amd64 (runner 平台), 消费方全为 amd64, 避免全架构 ×3-5 带宽
 #   - --dest-creds 无状态注入: 凭据仅存于进程内存, 不写 auth.json 落盘 (区别于 skopeo login)
 #   - --retry-times: 应对 Docker Hub 匿名限流 (GitHub runner 共享出口 IP)
+#     注意: 只用 --retry-times, 不用 --retry-delay —— 后者 skopeo v1.16.0 才引入,
+#     而 GitHub ubuntu-latest runner 预装 skopeo 1.13.3 (noble 打包版本), 用了必报
+#     "unknown flag: --retry-delay" (2026-08-28 实跑验证, run 33158427589)
 name: Sync Docker Images to GHCR
 
 on:
@@ -66,7 +69,7 @@ jobs:
           skopeo copy \
             ${SRC_CREDS:+--src-creds "$SRC_CREDS"} \
             --dest-creds "$DEST_CREDS" \
-            --retry-times 5 --retry-delay 10s \
+            --retry-times 5 \
             --multi-arch system \
             "docker://${{ matrix.source }}" \
             "docker://${DEST_IMAGE}:${{ matrix.tag }}"
