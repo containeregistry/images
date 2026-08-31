@@ -35,19 +35,10 @@ jobs:
       fail-fast: false # 某个镜像失败不影响其他镜像继续执行
       matrix:
         include:
-          - source: maximhq/bifrost:v2.0.0
-            tag: maximhq-bifrost-v2.0.0
-          - source: apache/apisix:3.18.0-debian
-            tag: apache-apisix-3.18.0-debian
-          - source: postgres:17.11-bookworm
-            tag: postgres-17.11-bookworm
-          - source: redis:7.4.11-bookworm
-            tag: redis-7.4.11-bookworm
-          # bitnami 公共目录迁移修复 (见文件头注释)
-          - source: bitnamilegacy/kafka:3.9
-            tag: bitnami-kafka-3.9
-          - source: apache/kafka:4.3.1
-            tag: apache-kafka-4.3.1
+          - source: otel/opentelemetry-collector-contrib:0.159.0
+            tag: opentelemetry-collector-contrib-0-159-0
+          - source: openobserve/openobserve:v0.92.2
+            tag: openobserve-v-0-92-2
 
     steps:
       # 说明: 不需要 checkout (无仓库文件依赖) 与 docker/login-action (skopeo 不读
