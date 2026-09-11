@@ -32,13 +32,13 @@ jobs:
       packages: write # 必须赋予推送到 GHCR 的权限
 
     strategy:
-      fail-fast: false # 某个镜像失败不影响其他镜像继续执行
+      fail-fast: false # 某个镜像失败不影响其他镜像继续执行 docker pull sonroyaalmerol/docker-sogo:5.12.9-1
       matrix:
         include:
-          - source: otel/opentelemetry-collector-contrib:0.159.0
-            tag: opentelemetry-collector-contrib-0-159-0
-          - source: openobserve/openobserve:v0.92.2
-            tag: openobserve-v-0-92-2
+          - source: sonroyaalmerol/docker-sogo:5.12.9-1
+            tag: sonroyaalmerol-docker-sogo-5.12.9-1
+#          - source: openobserve/openobserve:v0.92.2
+#            tag: openobserve-v-0-92-2
 
     steps:
       # 说明: 不需要 checkout (无仓库文件依赖) 与 docker/login-action (skopeo 不读
