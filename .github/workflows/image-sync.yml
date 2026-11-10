@@ -40,8 +40,11 @@ jobs:
 #          - source: openobserve/openobserve:v0.92.2
 #            tag: openobserve-v-0-92-2
 
-          - source: hashicorp/vault:2.2.1
-            tag: vault-2.2.1
+#          - source: hashicorp/vault:2.2.1
+#            tag: vault-2.2.1
+
+          - source: docker.elastic.co/beats/filebeat:7.10.2
+            tag: filebeat-7.10.2
 
 #          - source: gitlab/gitlab-ce:14.10.0-ce.0
 #            tag: gitlab-ce-14.10.0-ce.0
